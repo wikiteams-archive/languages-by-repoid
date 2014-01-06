@@ -69,7 +69,9 @@ for o, a in opts:
 repos = dict()
 
 repos_filename = 'repos.txt'
+repos_csv_filename = 'repos.csv'
 users_filename = 'users.txt'
+users_csv_filename = 'users.csv'
 repos_reported_nonexist = []
 
 
@@ -149,12 +151,12 @@ def make_headers():
     'If we are resuming program then dont create headers - '
     'CSV files are already created and they have some data'
     if resume_on_repo is None:
-        with open('repos.csv', 'ab') as output_csvfile:
+        with open(repos_csv_filename, 'ab') as output_csvfile:
             repowriter = UnicodeWriter(output_csvfile) if use_utf8 else csv.writer(output_csvfile, dialect=MyDialect)
             tempv = ('name', 'owner', 'lang1', 'lang2', 'lang3')
             repowriter.writerow(tempv)
 
-        with open('users.csv', 'ab') as output_csvfile:
+        with open(users_csv_filename, 'ab') as output_csvfile:
             ccomentswriter = UnicodeWriter(output_csvfile) if use_utf8 else csv.writer(output_csvfile, dialect=MyDialect)
             tempv = ('repo_name', 'repo_owner', 'lang1', 'lang2', 'lang3')
             ccomentswriter.writerow(tempv)
@@ -246,62 +248,75 @@ if __name__ == "__main__":
 
     iteration_step_count = 0
 
-    for key in repos:
+    with open(repos_csv_filename, 'wb') as csvfilerlw:
+        rlw = csv.writer(csvfilerlw, delimiter=',',
+                         quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        for key in repos:
 
-        if resume_on_repo is not None:
-            resume_on_repo_name = resume_on_repo.split(',')[0]
-            resume_on_repo_owner = resume_on_repo.split(',')[1]
+            if resume_on_repo is not None:
+                resume_on_repo_name = resume_on_repo.split(',')[0]
+                resume_on_repo_owner = resume_on_repo.split(',')[1]
 
-            if not ((resume_on_repo_name == repo.getName()) and
-                    (resume_on_repo_owner == repo.getOwner())):
-                iteration_step_count += 1
+                if not ((resume_on_repo_name == repo.getName()) and
+                        (resume_on_repo_owner == repo.getOwner())):
+                    iteration_step_count += 1
+                    continue
+
+            try:
+                repository_object = repos[key]
+                repository = gh.get_repo(key)
+                repo.setRepoObject(repository)
+            except UnknownObjectException as e:
+                scream.log_warning('Repo with key + ' + key +
+                                    ' not found, error({0}): {1}'.
+                                    format(e.status, e.data))
+                repos_reported_nonexist.append(key)
                 continue
 
-        try:
-            repository = gh.get_repo(key)
-            repo.setRepoObject(repository)
-        except UnknownObjectException as e:
-            scream.log_warning('Repo with key + ' + key +
-                                ' not found, error({0}): {1}'.
-                                format(e.status, e.data))
-            repos_reported_nonexist.append(key)
-            continue
+            try:
+                languages = repository.get_languages()
+                print str(languages)
+                print repository.language
+                print repository.languages_url
+            except GithubException as gite:
+                scream.log_warning('GithubException while gettings langs in + ' + key +
+                                    ' , error({0}): {1}'.
+                                    format(e.status, e.data))
+                continue
 
-        try:
-            languages = repository.get_languages()
-            print str(languages)
-            print repository.language
-            print repository.languages_url
-        except GithubException as gite:
-            scream.log_warning('GithubException while gettings langs in + ' + key +
-                                ' , error({0}): {1}'.
-                                format(e.status, e.data))
-            continue
+            rowtowrite = []
+            iteration_step_count += 1
+            rowtowrite.append(str(repository_object.getName()))
+            rowtowrite.append(str(repository_object.getOwner()))
 
-        iteration_step_count += 1
+            for language in languages:
+                rowtowrite.append(language)
+                rowtowrite.append(languages[language])
 
-        scream.ssay('Finished processing repo: ' + key + '.. moving on... ')
+            rlw.writerow(rowtowrite)
 
-        #del repos[key]
-        'Dictionary cannot change size during iteration'
-        'TO DO: associated fields purge so GC will finish the job'
-        'implement reset() in intelliRepository.py'
-        #scream.ssay('(' + key + ' deleted)')
+            scream.ssay('Finished processing repo: ' + key + '.. moving on... ')
 
-        limit = gh.get_rate_limit()
+            #del repos[key]
+            'Dictionary cannot change size during iteration'
+            'TO DO: associated fields purge so GC will finish the job'
+            'implement reset() in intelliRepository.py'
+            #scream.ssay('(' + key + ' deleted)')
 
-        scream.ssay('Rate limit (after whole repo is processed): ' +
-                    str(limit.rate.limit) +
-                    ' remaining: ' + str(limit.rate.remaining))
+            limit = gh.get_rate_limit()
 
-        reset_time = gh.rate_limiting_resettime
-        reset_time_human_readable = (datetime.datetime.fromtimestamp(
-                                     int(reset_time)).strftime(
-                                     '%Y-%m-%d %H:%M:%S')
-                                     )
-        scream.ssay('Rate limit reset time is exactly: ' +
-                    str(reset_time) + ' which means: ' +
-                    reset_time_human_readable)
+            scream.ssay('Rate limit (after whole repo is processed): ' +
+                        str(limit.rate.limit) +
+                        ' remaining: ' + str(limit.rate.remaining))
 
-        if limit.rate.remaining < 15:
-            freeze_more()
+            reset_time = gh.rate_limiting_resettime
+            reset_time_human_readable = (datetime.datetime.fromtimestamp(
+                                         int(reset_time)).strftime(
+                                         '%Y-%m-%d %H:%M:%S')
+                                         )
+            scream.ssay('Rate limit reset time is exactly: ' +
+                        str(reset_time) + ' which means: ' +
+                        reset_time_human_readable)
+
+            if limit.rate.remaining < 15:
+                freeze_more()
