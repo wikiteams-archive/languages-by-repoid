@@ -21,7 +21,6 @@ import gc
 import sys
 import codecs
 import cStringIO
-import intelliNotifications
 import __builtin__
 import time
 import datetime
@@ -227,22 +226,22 @@ if __name__ == "__main__":
 
     with open(repos_filename, 'rb') as source_csvfile:
         reposReader = csv.reader(source_csvfile, delimiter=',')
-        reposReader.next()
         for row in reposReader:
-            print 'Adding ' + row + ' to list.'
+            key = str(row[0])
+            print 'Adding ' + key + ' to list.'
 
             repo = MyRepository()
-            repo.setKey(row)
-            owner = row.split('/')[0]
-            name = row.split('/')[1]
+            repo.setKey(key)
+            owner = key.split('/')[0]
+            name = key.split('/')[1]
             repo.setInitials(name, owner)
 
             #check here if repo dont exist already in dictionary!
-            if row in repos:
-                scream.log('We already found rep ' + row +
+            if key in repos:
+                scream.log('We already found rep ' + key +
                            ' in the dictionary..')
             else:
-                repos[row] = repo
+                repos[key] = repo
 
 
     iteration_step_count = 0
@@ -259,13 +258,24 @@ if __name__ == "__main__":
                 continue
 
         try:
-            repository = gh.get_repo(repo.getKey())
+            repository = gh.get_repo(key)
             repo.setRepoObject(repository)
         except UnknownObjectException as e:
             scream.log_warning('Repo with key + ' + key +
                                 ' not found, error({0}): {1}'.
                                 format(e.status, e.data))
             repos_reported_nonexist.append(key)
+            continue
+
+        try:
+            languages = repository.get_languages()
+            print str(languages)
+            print repository.language
+            print repository.languages_url
+        except GithubException as gite:
+            scream.log_warning('GithubException while gettings langs in + ' + key +
+                                ' , error({0}): {1}'.
+                                format(e.status, e.data))
             continue
 
         iteration_step_count += 1
@@ -292,10 +302,6 @@ if __name__ == "__main__":
         scream.ssay('Rate limit reset time is exactly: ' +
                     str(reset_time) + ' which means: ' +
                     reset_time_human_readable)
-
-        if iteration_step_count % 5 == 0:
-            intelliNotifications.report_quota(str(limit.rate.limit),
-                                              str(limit.rate.remaining))
 
         if limit.rate.remaining < 15:
             freeze_more()
