@@ -153,7 +153,7 @@ def make_headers():
     if resume_on_repo is None:
         with open(repos_csv_filename, 'ab') as output_csvfile:
             repowriter = UnicodeWriter(output_csvfile) if use_utf8 else csv.writer(output_csvfile, dialect=MyDialect)
-            tempv = ('name', 'owner', 'lang1', 'lang2', 'lang3')
+            tempv = ('name', 'owner', 'lang1', 'lang1_value', 'lang2', 'lang2_value', 'lang3', 'lang3_value')
             repowriter.writerow(tempv)
 
         with open(users_csv_filename, 'ab') as output_csvfile:
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     iteration_step_count = 0
 
-    with open(repos_csv_filename, 'wb') as csvfilerlw:
+    with open(repos_csv_filename, 'ab') as csvfilerlw:
         rlw = csv.writer(csvfilerlw, delimiter=',',
                          quotechar='"', quoting=csv.QUOTE_MINIMAL)
         for key in repos:
@@ -265,6 +265,8 @@ if __name__ == "__main__":
             try:
                 repository_object = repos[key]
                 repository = gh.get_repo(key)
+                print 'getting contributors'
+                contributors = repository.get_contributors()
                 repo.setRepoObject(repository)
             except UnknownObjectException as e:
                 scream.log_warning('Repo with key + ' + key +
